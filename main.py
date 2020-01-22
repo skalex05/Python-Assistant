@@ -1,14 +1,14 @@
 try:
     import os,sys
     from sys import exit
-
     def Restart(cmd):
         try:
             os.startfile(__file__)
         except:
             os.startfile(__file__[0:-3]+".exe")
-        exit()
-    import threading, random, time, calendar, datetime, math,sys,webbrowser, pyttsx3, io, speech_recognition, pickle, wmi,docx,comtypes.client,googletrans,qhue, pyowm, ast, pyttsx3.drivers, pyttsx3.drivers.sapi5
+        int("oof")
+    import threading, random, time, calendar, datetime, math,sys,webbrowser, pyttsx3, io, speech_recognition, pickle, autocorrect, wmi,docx,comtypes.client,googletrans,qhue, pyowm, ast, pyttsx3.drivers, pyttsx3.drivers.sapi5, pyaudio
+    from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
     from tkinter import *
     from tkinter import filedialog
     import smtplib
@@ -42,7 +42,6 @@ try:
         
         def callback(self):
             self.window.quit()
-            exit()
 
         def Submit(self):
             self.submitted = True
@@ -56,7 +55,6 @@ try:
             self.entryBox.grid()
 
         def run(self):
-            
             self.window = Tk()
             self.window.protocol("WM_DELETE_WINDOW", self.callback)
             self.window.geometry("505x295")
@@ -78,7 +76,8 @@ try:
             self.submit = Button(self.window,text = "Ask",command = self.Submit,width = 5)
             self.submit.grid(row = 2,column = 1)
 
-            self.ShowEntry()
+            self.HideEntry()
+            Entry()
 
             self.window.mainloop()
             global windowClosed
@@ -98,10 +97,42 @@ try:
         engine = pyttsx3.init()
         assistantVoice = engine.getProperty('voices')[0]
         engine.stop()
+
+    def GetVolume():
+        sessions = AudioUtilities.GetAllSessions()
+        highestVol = 0
+        for session in sessions:
+            volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+            vol = volume.GetMasterVolume()
+            if vol > highestVol:
+                highestVol = vol
+        return highestVol
         
+    previousVolume = GetVolume()
+
+    def SetVolume(vol,excludeAssistant = False):
+        global previousVolume
+        sessions = AudioUtilities.GetAllSessions()
+        previousVolume = GetVolume()
+        if type(vol) == str:
+            vol = float(vol)+GetVolume()
+        if vol > 1:
+            vol = 1
+        elif vol < 0:
+            vol = 0
+        for session in sessions:
+            volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+            try:
+                appname = session.Process.name()
+            except:
+                appname = ""
+            if not (appname == "main.exe" or appname == "main.py"):
+                volume.SetMasterVolume(vol, None)
+                
     muted = False
 
     def Say(text):
+        SetVolume(0.1,True)
         app.DisplayOutput(text)
         global muted
         if not muted:
@@ -115,17 +146,18 @@ try:
                 app.DisplayOutput(e)
         else:
             time.sleep(len(text)*0.1+1)
+        SetVolume(previousVolume)
 
     try:
         import requests, bs4
     except Exception:
-        Say("Error: The requests module cannot work properly. This might cause web based commands to not work correctly")
+        Say("Error: The requests module cannot work properly. This might cause web based commands to not work correctly.")
 
-    Say("Loading")
+    Say("Loading.")
 
     r = speech_recognition.Recognizer()
 
-    manualMode = True
+    manualMode = False
     didntCatch = False
     def SpeechInput(prompt = "",question = False, timelimit = None):
         global stopTime
@@ -152,15 +184,15 @@ try:
                     Say("Sorry. I'm having trouble understanding what you are saying.")
                     Say("Please check your internet connection.")
                     manualMode = True
-                    showEntry()
+                    app.ShowEntry()
                     text = SpeechInput(prompt)
                 except Exception:
-                    say("Error")
+                    Say("Error")
                 app.dots.configure(text = ".  .  .")
                 if text == "manual":
                     manualMode = True
                     app.ShowEntry()
-                    Say("Switched to manual mode")
+                    Say("Switched to manual mode.")
                     text = SpeechInput(prompt)
                 if text != "":
                     didntCatch = False
@@ -176,7 +208,7 @@ try:
             if text == "speech":
                 manualMode = False
                 app.HideEntry()
-                Say("Switched to speech mode")
+                Say("Switched to speech mode.")
                 text = SpeechInput(prompt)
                 
         if "shut down" in text:
@@ -185,6 +217,17 @@ try:
             text = "logout computer"
         app.dots.configure(text = ".  .  .")
         return text    
+
+    def TypeInput(prompt):
+        global manualMode
+        prevMode = manualMode
+        manualMode = True
+        app.ShowEntry()
+        result = SpeechInput(prompt)
+        manualMode = prevMode
+        if not manualMode:
+            app.HideEntry()
+        return result
 
     def FilterAndSeperate(text,exclusion = invalidCharacters):
         result = []
@@ -197,6 +240,25 @@ try:
                 word = ""
         result.append(word)
         return result
+
+    def Dictionary(cmd):
+        correctedWord = autocorrect.spell(cmd.cachedData[0])
+        try:
+            searchInput = "https://www.merriam-webster.com/dictionary/"+correctedWord
+            res = requests.get(searchInput)
+            res.raise_for_status()
+            soup = bs4.BeautifulSoup(res.text, "html.parser")
+            definitions = soup.find_all("span",attrs={"class":"dtText"})
+            Say("Definition of "+correctedWord+":")
+            defs = 4
+            if len(definitions) < 4:
+                defs = len(definitions)
+            for i in range(defs):
+                Say(definitions[i].text[2::].capitalize())
+            
+        except:
+            Say("I couldn't define "+correctedWord)
+        
 
     def FilterValidAndSeperate(text,validChars):
         result = []
@@ -271,9 +333,10 @@ try:
             assistantVoice = namedVoices[chosenVoice-1]
             pickle.dump(assistantVoice,open("Voice.dat","wb"))
             Say("Voice Changed to option "+str(chosenVoice))
-        except Exception:
-            Say("That's not an option")
-            Say("Search how to get more voices in windows if you can't find what you are looking for")
+        except Exception as e:
+            print(e)
+            Say("That's not an option.")
+            Say("Search how to get more voices in windows if you can't find what you are looking for.")
 
     try:
         name = pickle.load(open("Name.dat","rb"))
@@ -285,11 +348,11 @@ try:
     def Goodbye(cmd):
         global username
         Say("Goodbye for now, "+username+", see you soon!")
-        exit()
+        app.callback()
 
     def Hello(cmd):
         global username
-        Say(random.choice(["Hello","Hi","Welcome","Good day","Hey"])+" "+username +", my name is " + name)
+        Say(random.choice(["Hello","Hi","Welcome","Good day","Hey"])+" "+username +", my name is " + name+".")
 
     def ChangeUsername(cmd):
         global username
@@ -304,13 +367,11 @@ try:
     def ChangeName(cmd):
         global name
         name = SpeechInput("What would you like to change my name to?")
-        if name.lower() == "manual":
-            name = input(": ")
         pickle.dump(name,open("Name.dat","wb"))
         Hello("")
 
     def RandomNumber(cmd):
-        Say("Your random number between "+ str(cmd.cachedData[0]) + " and "+ str(cmd.cachedData[1]) + " is " +str(random.randint(cmd.cachedData[0],cmd.cachedData[1])))
+        Say("Your random number between "+ str(cmd.cachedData[0]) + " and "+ str(cmd.cachedData[1]) + " is " +str(random.randint(cmd.cachedData[0],cmd.cachedData[1]))+".")
 
     events = {
         "christmas day": [25,12],
@@ -340,7 +401,7 @@ try:
                 end = "nd"
             elif event[0] % 10 == 3 and event[0] != 13:
                 end = "rd"
-            Say(text + " is on the "+ str(event[0]) + end + " of "+ calendar.month_name[event[1]] )
+            Say(text + " is on the "+ str(event[0]) + end + " of "+ calendar.month_name[event[1]]+".")
         except Exception as e:
             Say("I don't quite know what that event is...")
 
@@ -370,20 +431,28 @@ try:
         m = time.strftime("%M")
         if len(m)==1:
             m = "0"+m
-        Say("The time is " + str(h) + " "+ m + " "+tod)
+        Say("The time is " + str(h) + " "+ m + " "+tod+".")
 
 
     try:
         Calendar = pickle.load(open("Calendar.dat","rb"))
     except Exception:
         Calendar = []
-        
+
+    def Feeling(cmd):
+        Say("I am well")
+        userFeeling = SpeechInput("How are you today?").lower()
+        if userFeeling in ["good","well","happy","amazing","fantastic","great","lovely","really good","excited"]:
+            Say("Thats great to hear.")
+        elif userFeeling in ["sad","mad","angry","annoyed","frustrated","unhappy","bad","terrible"]:
+            Say("Oh, thats a shame.")
+        Say("Well I hope you have a great day!")
+
     def AddCalendar(cmd):
         global Calendar
         isValid = False
         while not isValid:
-            Say("Type the date as dd/mm/yy")
-            date = input(": ")
+            date = TypeInput("Type the date as dd/mm/yy")
             try:
                 date = datetime.datetime.strptime(date, "%d/%m/%y")
                 isValid = True
@@ -393,7 +462,7 @@ try:
         description = SpeechInput("What description would you like to give it?")
         Calendar.append([date,title,description])
         pickle.dump(Calendar,open("Calendar.dat","wb"))
-        Say("Event added to your calendar")
+        Say("Event added to your calendar.")
 
     try:
         HueInfo = pickle.load(open("PhilipsHue.dat","rb")) 
@@ -401,9 +470,9 @@ try:
         HueInfo = {}
         pickle.dump({},open("PhilipsHue.dat","wb")) 
     def SetupHue(cmd):
-        Say("Welcome to Philips Hue light setup")
+        Say("Welcome to Philips Hue light setup.")
         try:
-            Say("Retrieving your Hue bridge's ip")
+            Say("Retrieving your Hue bridge's ip...")
             searchInput = "https://www.meethue.com/api/nupnp"
             res = requests.get(searchInput)
             res.raise_for_status()
@@ -411,38 +480,39 @@ try:
             info = ast.literal_eval(info)[0]
             HueInfo["BridgeIp"] = info["internalipaddress"]
             
-            Say("Creating a username")
+            Say("Creating a username...")
             HueInfo["Username"] = qhue.create_new_username(HueInfo["BridgeIp"])
             
-            Say("I would reccomend you turn on all of your Hue lights now. I will turn them off one at a time so you can give them a name to easily access them")
+            Say("I would reccomend you turn on all of your Hue lights now. I will turn them off one at a time so you can give them a name to easily access them.")
             b = qhue.Bridge(HueInfo["BridgeIp"],HueInfo["Username"])
-            Say("Connected to your hue bridge")
+            Say("Connected to your hue bridge.")
             HueInfo["Lights"] = {}
             for light in b.lights():
                 if b.lights[light].on:
                     b.lights[light].state(on = False)
                     lightName = SpeechInput("Find the light that I turned off. What name do you want to give this light: ").lower()
                     HueInfo["Lights"][lightName] = b.lights[light]()["uniqueid"]
-            Say("Saving Hue Settings")
+            Say("Saving Hue Settings...")
             pickle.dump(HueInfo,open("PhilipsHue.dat","wb")) 
             Say("Setup Complete")
         except Exception as e:
-            Say("An error occured when setting up your Hue lights")
+            Say("An error occured when setting up your Hue lights.")
 
     def RenameHueLight(cmd):
         if HueInfo == {}:
-            Say("Hmm, It appears you don't have this command set up")
-            Say("To set up hue lights to work with me, simply say set up hue")
+            Say("Hmm, It appears you don't have this command set up.")
+            Say("To set up hue lights to work with me, simply say set up hue.")
+            return
         Say("Here is a list of your lights: ")
         for light in HueInfo["Lights"]:
             Say(light)
         try:
-            old = SpeechInput("Enter the name of the light").lower()
+            old = SpeechInput("What is the name of the light?").lower()
             HueInfo["Lights"][old]
         except:
             Say("I couldn't find a light called "+old)
             return
-        new = SpeechInput("Enter the new name for the light").lower()
+        new = SpeechInput("What is the new name for the light.").lower()
         HueInfo["Lights"][new] = HueInfo["Lights"][old]
         del HueInfo["Lights"][old]
         pickle.dump(HueInfo,open("PhilipsHue.dat","wb")) 
@@ -450,8 +520,9 @@ try:
             
     def HuePercent(cmd):
         if HueInfo == {}:
-            Say("Hmm, It appears you don't have this command set up")
-            Say("To set up hue lights to work with me, simply say set up hue")
+            Say("Hmm, It appears you don't have this command set up.")
+            Say("To set up hue lights to work with me, simply say set up hue.")
+            return
         try:
             lightName = cmd.cachedData[0]
             percent = cmd.cachedData[1]
@@ -477,8 +548,9 @@ try:
 
     def HueOnOff(cmd):
         if HueInfo == {}:
-            Say("Hmm, It appears you don't have this command set up")
-            Say("To set up hue lights to work with me, simply say set up hue")
+            Say("Hmm, It appears you don't have this command set up.")
+            Say("To set up hue lights to work with me, simply say set up hue.")
+            return
         try:
             lightName = cmd.cachedData[0]
             b = qhue.Bridge(HueInfo["BridgeIp"],HueInfo["Username"])
@@ -493,11 +565,11 @@ try:
                             b.lights[light].state(on = True)
                         else:
                             b.lights[light].state(on = False)
-                Say("Turned "+ cmd.cachedData[1]+" "+lightName)
+                Say("Turned "+ cmd.cachedData[1]+" "+lightName+".")
             else:
-                Say("I couldn't find a light called "+lightName)
+                Say("I couldn't find a light called "+lightName+".")
         except:
-            Say("Sorry, something went wrong")
+            Say("Sorry, something went wrong.")
 
     def CheckCalendar(cmd):
         global Calendar
@@ -516,9 +588,9 @@ try:
                         Calendar.remove(event)
             pickle.dump(Calendar,open("Calendar.dat","wb"))
             if not found:
-                Say("I couldn't find anything on your calendar for today")
+                Say("I couldn't find anything on your calendar for today.")
         else:
-            Say("There isn't any events in your calendar")
+            Say("There isn't any events in your calendar.")
 
     def BasicMath(cmd):
         a = cmd.cachedData[0]
@@ -526,12 +598,16 @@ try:
         r = 0
         operation = cmd.cachedData[2]
         if operation in ["add","plus","+"]:
+            operation = "plus"
             r = a + b
         elif operation in ["minus","subtract","-"]:
+            operation = "subtract"
             r = a - b
-        elif operation in ["divide","over"]:
+        elif operation in ["/","divided","over"]:
+            operation = "divided by"
             r = a / b
-        elif operation in ["multiply","times"]:
+        elif operation in ["multipied","times"]:
+            operation = "multiplied by"
             r = a * b
         elif operation in ["power","^"]:
             operation = "to the power of"
@@ -546,7 +622,7 @@ try:
                 round(r)
         except Exception:
             pass
-        Say("The result of "+str(a)+" "+operation+" "+str(b)+ " is "+ str(r))
+        Say("The result of "+str(a)+" "+operation+" "+str(b)+ " is "+ str(r)+".")
         
 
     def CorrectPath(path):
@@ -588,12 +664,12 @@ try:
             if "y" in SpeechInput("An app called "+appName+" already exists, are you sure you want to change it?").lower():
                 appDirs[appName] = GetDirectory()
                 pickle.dump(appDirs,open("AppInfo.dat","wb"))
-                Say("Changed app called"+appName+" successfully")
+                Say("Changed app called"+appName+" successfully.")
         else:
-            if "y" in SpeechInput("Are you sure you want to add an app called "+appName).lower():
+            if "y" in SpeechInput("Are you sure you want to add an app called "+appName+".").lower():
                 appDirs[appName] = GetDirectory()
                 pickle.dump(appDirs,open("AppInfo.dat","wb"))
-                Say("Added app called"+appName+" successfully")
+                Say("Added app called"+appName+" successfully.")
 
     c = wmi.WMI()
     try:
@@ -619,7 +695,7 @@ try:
                             appDirs[appName] = p.ExecutablePath
                             pickle.dump(appDirs,open("AppInfo.dat","wb"))
                     else:
-                        if "y" in SpeechInput("Are you sure you want to add an app called "+appName).lower():
+                        if "y" in SpeechInput("Are you sure you want to add an app called "+appName+".").lower():
                             appDirs[appName] = p.ExecutablePath
                             pickle.dump(appDirs,open("AppInfo.dat","wb"))
                 else:
@@ -637,20 +713,20 @@ try:
         if selectedApp != "":
             Say("Opening "+ appName)
             if not os.path.isfile(selectedApp):
-                Say("The directory to "+ selectedApp + "is incorrect or has been changed")
-                Say("You can now change it to the correct directory")
+                Say("The directory to "+ selectedApp + "is incorrect or has been changed.")
+                Say("You can now change it to the correct directory.")
                 appDirectory = GetDirectory()
                 selectedApp = appDirectory
                 appDirs[appName] = appDirectory
                 pickle.dump(appDirs,open("AppInfo.dat","wb"))
             os.startfile(selectedApp)
         else:
-            Say("I couldn't find an app called " + appName)
+            Say("I couldn't find an app called " + appName+".")
             if "y" in SpeechInput("Would you like to create an app called "+appName+"?: ").lower():
                 appDirectory = GetDirectory()
                 appDirs[appName] = appDirectory
                 pickle.dump(appDirs,open("AppInfo.dat","wb"))
-                Say("Successfully added "+ appName)
+                Say("Successfully added "+ appName+".")
                 os.startfile(selectedApp)
          
     def StartTimer(cmd):
@@ -697,7 +773,7 @@ try:
             text = "Today in "+userLocation+", It is "
             suggestion = ""
             if temp <= 0:
-                suggestion = "Its going to be freezing today so wrap up really warm "
+                suggestion = "Its going to be freezing today so wrap up really warm"
             elif (temp < 15 and temp > 0) or status == "snow":
                 suggestion= "Wrap up warm. It should be cold today"
             elif temp > 22 and temp <= 30:
@@ -705,14 +781,14 @@ try:
             elif temp > 30:
                 suggestion= "Its very hot today. Remember to drink lots of water to stay hydrated"
             else:
-                suggestion = "The temperature should be quite mild"
+                suggestion = "The temperature should be quite mild."
             if status == "clouds":
                 text += "cloudy"
             elif status == "mist":
-                suggestion += " and be careful if you're driving"
+                suggestion += " and be careful if you're driving."
                 text += "misty"
             elif status == "rain" or status == "drizzle":
-                suggestion += " and don't forget a coat and umbrella"
+                suggestion += " and don't forget a coat and umbrella."
                 text += "raining"
             elif status == "snow":
                 suggestion += " and don't forget to wear a coat. Have fun in the snow!"
@@ -723,11 +799,6 @@ try:
             Say(text)
         except:
             Say("I am not sure what the weather is right now.")
-        
-        
-        
-            
-        
         
     def Search(cmd):
         try:
@@ -745,10 +816,10 @@ try:
             while link[0:4] != "/url" or link[14:20] == "google":
                 i += 1
                 link = linkElements[i].get("href")
-            Say("Searching google for " + cmd.cachedData[0])
+            Say("Searching google for " + cmd.cachedData[0]+".")
             webbrowser.open("http://google.com"+link)
         except Exception as e:
-            Say("Something went wrong while searching for "+ cmd.cachedData[0])
+            Say("Something went wrong while searching for "+ cmd.cachedData[0]+".")
 
     try:
         shoppingList = pickle.load(open("shoppingList.dat","rb"))
@@ -759,7 +830,7 @@ try:
         global shoppingList
         shoppingList.append(cmd.cachedData[1])
         pickle.dump(shoppingList,open("shoppingList.dat","wb"))
-        Say("Added "+cmd.cachedData[1]+" to your shopping list")
+        Say("Added "+cmd.cachedData[1]+" to your shopping list.")
 
         
     def RemoveShoppingList(cmd):
@@ -767,7 +838,7 @@ try:
         try:
             shoppingList.remove(cmd.cachedData[1])
             pickle.dump(shoppingList,open("shoppingList.dat","wb"))
-            Say("Removed "+cmd.cachedData[1]+" to your shopping list")
+            Say("Removed "+cmd.cachedData[1]+" to your shopping list.")
         except:
             pass
 
@@ -776,7 +847,7 @@ try:
         try:
             shoppingList = []
             pickle.dump(shoppingList,open("shoppingList.dat","wb"))
-            Say("Cleared your shopping list")
+            Say("Cleared your shopping list.")
         except:
             pass
 
@@ -800,22 +871,19 @@ try:
                 if "y" in SpeechInput("Would you like to clear your shopping list?").lower():
                     ClearShoppingList("")
             except Exception as e:
-                Say("You can't go shopping right now")
+                Say("You can't go shopping right now.")
         else:
-            Say("You don't have anything on your shopping list")
+            Say("You don't have anything on your shopping list.")
 
     try:
         email = pickle.load(open("email.dat","rb"))
     except:
-        Say("Would you mind quickly setting up an email address that I can use to send you info")
-        Say("Once you've created it, enter in its email and password so I can use it")
+        Say("Would you mind quickly setting up an email address that I can use to send you info.")
+        Say("Once you've created it, enter in its email and password so I can use it.")
         email = {}
-        Say("Type in my email address")
-        email["Address"] = input(":")
-        Say("Type in my password")
-        email["Pass"] = input(":")
-        Say("Type in your email address so I can send emails to you")
-        email["UserAddress"] = input(":")
+        email["Address"] = TypeInput("Type in my email address.")
+        email["Pass"] = TypeInput("Type in my password.")
+        email["UserAddress"] = TypeInput("Type in your email address so I can send emails to you.")
         pickle.dump(email,open("email.dat","wb"))
 
     def SendEmail(recipient,subject = "",message = "",attachment = ""):
@@ -824,14 +892,14 @@ try:
             msg["From"] = email["Address"]
             msg["To"] = email["Address"]
             msg["Subject"] = subject
+            msg.attach(MIMEText(message,"plain"))
             if attachment != "":
                 Attachment = open(attachment,"rb")
                 part = MIMEBase("application","octet-stream")
                 part.set_payload((Attachment).read())
                 encoders.encode_base64(part)
                 part.add_header("Content-Disposition","attachement; filename ="+attachment)
-            msg.attach(MIMEText(message,"plain"))
-            msg.attach(part)
+                msg.attach(part)
             text = msg.as_string()
             server = smtplib.SMTP("smtp.gmail.com:587")
             server.ehlo()
@@ -839,16 +907,15 @@ try:
             server.login(email["Address"],email["Pass"])
             server.sendmail(email["Address"],recipient,text)
             server.quit()
-            Say("Email Sent")
+            Say("Email Sent.")
         except Exception as e:
-            app.DisplayOutput(e)
-            Say("Email failed to send")
+            print(e)
+            Say("Email failed to send.")
 
     def Email(cmd):
-        Say("Type the email address of the email recipient")
-        recipient = input(":")
-        subject = SpeechInput("Enter a subject for the email")
-        message = SpeechInput("Enter in a message")
+        recipient = TypeInput("Type the email address of the email recipient:")
+        subject = SpeechInput("Enter a subject for the email:")
+        message = SpeechInput("Enter in a message:")
         Say("Add an attachment:")
         attachment = GetDirectory()
         SendEmail(recipient,subject,message,attachment)
@@ -872,7 +939,7 @@ try:
 
             SendEmail(email["UserAddress"],"Shopping List","Here's your shopping list you can take with you","shoppingList.pdf")
         except:
-            Say("Failed to send your shopping list")
+            Say("Failed to send your shopping list.")
 
     def NumericalFilter(text,validCharacters = ["0","1","2","3","4","5","6","7","8","9","-",".","+"]):
         result = ""
@@ -884,65 +951,89 @@ try:
     def Mute(cmd):
         global muted
         muted = True
-        Say("muted")
+        Say("Muted.")
 
     def Unmute(cmd):
         global muted
         muted = False
-        Say("Unmuted")
+        Say("Unmuted.")
+
+    def CMDSetVolume(cmd):
+        volume = cmd.cachedData[0]
+        volume = cmd.cachedData[0] / 100
+        SetVolume(volume)
+        Say("Set volume to "+str(int(volume * 100))+"%")
+
+    def VolumeUpDown(cmd):
+        if cmd.cachedData[0] == "up":
+            SetVolume("0.1")
+        elif cmd.cachedData[0] == "down":
+            SetVolume("-0.1")
+        else:
+            return
+        Say("Turned volume "+cmd.cachedData[0]+".")
+            
 
     def Marsh(cmd):
-        Say("Mr marsh is life")
+        Say("Mr marsh is life.")
 
-    cmdWords = {}
     lastCMD = None
     lastFilterInput = []
     CMDs = {}
+    CMDGroups = {}
+
     def Help(cmd):
         while True:
             Say("Here are the available topics:")
-            Say("Commands")
-            Say("How I Work")
-            Say("Talking")
+            Say("- Commands")
+            Say("- How I Work")
+            Say("- Talking")
             Topic = SpeechInput("What Topic Would you like me to cover?").lower()
 
             if Topic == "commands":
-                Say("Here's a list of the commands you can get me to do: ")
-                for cmd_ in CMDs:
-                    Say(cmd_)
+                Say("Here are the available command topics:")
+                for group in CMDGroups:
+                    if group != "***":
+                        Say("- "+group.capitalize())
                 commandHelp = True
-                while commandHelp:
-                    query = SpeechInput("What would you like help with? (say done to leave help)").lower()
-                    if query == "done":
-                        commandHelp = False
-                    else:
-                        try:
-                            Say(CMDs[query].help)
+                group = SpeechInput("What command topic would you like help with:").lower()
+                if group in CMDGroups.keys() and group != "***":
+                    Say("Here are the available commands:")
+                    for command in CMDGroups[group]:
+                        Say("- "+command.capitalize())
+                    while commandHelp:
+                        query = SpeechInput("What would you like help with? (say done to leave help)").lower()
+                        if query == "done":
+                            commandHelp = False
+                        else:
+                            #try:
+                            Say(CMDGroups[group][query].help)
                             Say("Required Keywords:")
-                            app.DisplayOutput(str(CMDs[query].reqWords))
+                            app.DisplayOutput(str(CMDGroups[group][query].reqWords))
                             time.sleep(4)
-                        except Exception:
-                            Say("I couldn't help you with the query, "+query)
+    ##                        except Exception as e:
+    ##                            print(e)
+    ##                            Say("I couldn't help you with the query, "+query)
             elif Topic == "how i work" or Topic == "how you work":
-                Say("I work by analysing each word you tell me")
+                Say("I work by analysing each word you tell me.")
                 Say("I have a certain set of commands of which some have required keywords that I use to figure out what you want me to do.")
-                Say("Some keywords help tell me if I need to be looking for infomation")
+                Say("Some keywords help tell me if I need to be looking for infomation.")
                 Say("such as the open keyword that tells me the name of the app will come after it.")
                 Say("This can help give you more flexibility in how you say certain commands as I only look for keywords.")
                 Say("Although I can get a bit confused if you don't use the required keywords.")
                 Say("I work out what you are saying by using Google's speech to text API which requires an internet connection.")
                 Say("I can't work out what you say to me without a connection and so you will be limited to typing in commands.")
             elif Topic == "talking":
-                Say("When talking to me you may notice several dots appearing in the console")
-                Say("1 dot means I am listening for your command")
-                Say("2 dots means I am working out what you said to me")
-                Say("3 dots means I am ready to carry out your given command")
-                Say("I can't hear you while I am working out or carrying out a command")
-                Say("So make sure you only talk to me while there is 1 dot on screen")
+                Say("When talking to me you may notice several dots appearing on screen.")
+                Say("1 dot means I am listening for your command.")
+                Say("2 dots means I am working out what you said to me.")
+                Say("3 dots means I am ready to carry out your given command.")
+                Say("I can't hear you while I am working out or carrying out a command.")
+                Say("So make sure you only talk to me while there is 1 dot on screen.")
                 Say("Also, in some cases you might want to type what you want me to do.")
-                Say("If so you can switch between the two modes by saying 'manual' to type and type 'speech' to start talking again.")
+                Say("If so you can switch between the two modes by saying 'manual' and 'speech'")
             else:
-                Say(Topic+" is not a valid topic")
+                Say(Topic+" is not a valid topic.")
             if "n" in SpeechInput("Would you like to continue?").lower():
                 break
         Say("Bye for now! Remember, I am always here to help you!")
@@ -950,12 +1041,10 @@ try:
     #Command Handling
 
     class cmdWord:
-        def __init__(self,word,startRecording = False,stopRecording = False,addCMDWord = False):
-            self.word = word
+        def __init__(self,startRecording = False,stopRecording = False,addCMDWord = False):
             self.includeWord = addCMDWord
             self.start = startRecording
             self.stop = stopRecording
-            cmdWords[word] = self
 
     class cmdType:
         def __init__(self,numerical = False,multiWord = True):
@@ -990,7 +1079,15 @@ try:
         return True
 
     class CMD:
-        def __init__(self,name,requiredCmdWords = [[""]],function = NoReply,helpDescription = "",dataFormat = [cmdType()]):
+        def __init__(self,group,name,weight,requiredCmdWords = [[""]],function = NoReply,helpDescription = "",dataFormat = [cmdType()],cmdWords = {},getDataOnStart = False):
+            if group in CMDGroups.keys():
+                CMDGroups[group][name] = self
+            else:
+                CMDGroups[group] = {}
+                CMDGroups[group][name] = self
+            self.weight = weight
+            self.getDataOnStart = getDataOnStart
+            self.cmdWords = cmdWords
             self.dataFormat = dataFormat
             self.help = helpDescription
             self.name = name
@@ -1015,27 +1112,27 @@ try:
             iterations = 0
             while FindEmptyData(self,self.cachedData) != True and iterations < 64:
                 iterations += 1
-                GetData = False
+                GetData = self.getDataOnStart
                 criteria = FindEmptyData(self,self.cachedData)
                 if criteria == True:
                     break
                 Data = ""
                 for word in words:
-                    if word in cmdWords.keys():
-                        if cmdWords[word].includeWord:
+                    if word in self.cmdWords.keys():
+                        if self.cmdWords[word].includeWord:
                             cachedData = AddCachedData(word,self.cachedData,self.dataFormat)
                             criteria = FindEmptyData(self,self.cachedData)
                             if criteria == True:
                                 break
-
-                        if cmdWords[word].stop:
+                        if (self.cmdWords[word].stop and AmountEmptyData(self.cachedData) > 1):
                             GetData = False
                             self.cachedData = AddCachedData(Data,self.cachedData,self.dataFormat)
                             Data = ""
                             criteria = FindEmptyData(self,self.cachedData)
                             if criteria == True:
                                 break
-                            
+                    if not criteria.multiWord and Data != "":
+                        GetData = False
                     if GetData:
                         if Data != "" and criteria.multiWord:
                             Data += " "
@@ -1043,8 +1140,8 @@ try:
                             Data += NumericalFilter(word)
                         else:
                             Data += word
-                    if word in cmdWords.keys():
-                        if cmdWords[word].start:
+                    if word in self.cmdWords.keys():
+                        if self.cmdWords[word].start:
                             GetData = True
                 self.cachedData = AddCachedData(Data,self.cachedData,self.dataFormat)
             if FindEmptyData(self,self.cachedData) == True:
@@ -1062,7 +1159,7 @@ try:
     def BestCMD(Words):
         best = str(CMDs[list(CMDs.keys())[0]])
         for cmd_ in CMDs:
-            if CMDs[cmd_].relevantCommand(Words) and len(CMDs[cmd_].reqWords) > len(CMDs[best].reqWords):
+            if CMDs[cmd_].relevantCommand(Words) and (len(CMDs[cmd_].reqWords) > len(CMDs[best].reqWords) or CMDs[cmd_].weight > CMDs[best].weight):
                 best = cmd_
         return CMDs[best]
 
@@ -1079,83 +1176,54 @@ try:
 
     #CommandWords
 
-    cmdWord("off",False,False,True)
-    cmdWord("on",False,False,True)
-    cmdWord("turn",True)
-    cmdWord("light",False,True)
-    cmdWord("shutdown",False,False,True)
-    cmdWord("logout",False,False,True)
-    cmdWord("restart",False,False,True)
-    cmdWord("translate",True)
-    cmdWord("and",True,True)
-    cmdWord("to",True,True)
-    cmdWord("from",True,True)
-    cmdWord("by",True,True)
-    cmdWord("open",True,False)
-    cmdWord("start",True,False)
-    cmdWord("search",True)
-    cmdWord("number",True)
-    cmdWord("total",True)
-    cmdWord("result",True)
-    cmdWord("add",True,True,True)
-    cmdWord("remove",True,True,True)
-    cmdWord("subtract",True,True,True)
-    cmdWord("+",True,True,True)
-    cmdWord("-",True,True,True)
-    cmdWord("minus",True,True,True)
-    cmdWord("power",True,True,True)
-    cmdWord("^",True,True,True)
-    cmdWord("minus",True,True,True)
-    cmdWord("plus",True,True,True)
-    cmdWord("divide",True,True,True)
-    cmdWord("over",True,True,True)
-    cmdWord("multiply",True,True,True)
-    cmdWord("times",True,True,True)
-    cmdWord("when", True)
 
     #Commands
-    CMD("no reply",[],NoReply,"This just tells you that I didn't quite understand what you wanted me to do.",[])
-    CMD("help",["help"],Help,"Provides help",[])
-    CMD("repeat",[["repeat"]],Repeat,"Repeats the last command",[])
-    CMD("hello",[["hello","hi","hey"]],Hello,"Simply say hello.",[])
-    CMD("goodbye",[["goodbye","bye"]],Goodbye,"Simply say goodbye to close me.",[])
-    CMD("change my name",[["change"],["your"],["name","username"]],ChangeName,"Change my name to something that feels more personal",[])
-    CMD("change your name",[["change"],["my"],["name","username"]],ChangeUsername,"Change your username to something that feels more personal",[])
-    CMD("change voice",[["change"],["voice"]],ChangeVoice,"Change my voice to one of several option that are demoed to you beforehand",[])
-    CMD("open app",[["open"]],OpenApp,"Open an app by telling me its name. If I don't already know where that app is I'll ask you for its directory so I can create a shortcut",[cmdType(False,False)])
-    CMD("change app",[["change","add"],["app"]],ChangeApp,"If you made a mistake when giving me an app's directory or want to add an new app's directory",[])
-    CMD("google search",[["search", "google"]],Search,"Search google using the 'search' or 'google' keyword and I will provide you with the top search result")
-    CMD("joke", [["joke"]],Joke,"I'll tell you a joke",[])
-    CMD("time", [["time"]],GetTime,"I'll tell you the time",[])
-    CMD("date",[["date","day","today"]],GetDate,"I'll tell you the date",[])
-    CMD("random number",[["random"],["number"],["and","to"]],RandomNumber,"I'll give you a random number between a and b which could be set out similar to the following: give me a random number between a and b.",[cmdType(True,False),cmdType(True,False)])
-    CMD("simple math",[["add","plus","subtract","minus","times","power","^","multiply","divide","over","+","-"],["result","total"]],BasicMath,"I can do division, multiplication, subtraction and addition of two numbers but remember to use the keywords 'result' or 'total'",[cmdType(True,False),cmdType(True,False),cmdType(False,False)])
-    CMD("start timer",[["start","begin"],["timer"]],StartTimer,"I'll start a timer",[])
-    CMD("stop timer",[["stop","end","finish"],["timer"]],StopTimer,"I'll stop a timer and tell you how long it lasted",[])
-    CMD("events",[["when"],["is"]],WhenEvent,"I can tell you when special events like halloween are")
-    CMD("add calendar",[["add"],["calendar"]],AddCalendar,"Set events on certain dates to remind you to do tasks and stay organised",[])
-    CMD("check calendar",[["check","show"],["calendar"]],CheckCalendar,"Check tasks you have to do today on your calendar to remind you to do tasks and stay organised",[])
-    CMD("???",[["mr"],["marsh"],["is"],["love"]],Marsh,"???",[])
-    CMD("mute",[["mute"]],Mute,"Mute my voice but text will still appear on screen",[])
-    CMD("unmute",[["unmute"]],Unmute,"Unmute my voice when you want",[])
-    CMD("add shopping list",[["add"],["to"],["shopping"],["list"]],AddShoppingList,"Add something to your shopping list",[cmdType(False,False),cmdType(False,True)])
-    CMD("remove shopping list",[["remove"],["to"],["shopping"],["list"]],RemoveShoppingList,"Remove an item from your shopping list",[cmdType(False,False),cmdType(False,True)])
-    CMD("clear shopping list",[["clear"],["shopping"],["list"]],ClearShoppingList,"Removes all items from shopping your list",[])
-    CMD("go shopping",[["go"],["shopping"]],GoShopping,"Searches each item on your shopping list on amazon",[])
-    CMD("email shopping list",[["email","send","give","get","app.DisplayOutput"],["shopping"],["list"]],PrintShoppingList,"Emails your shopping list to the email that you provided me with",[])
-    CMD("email",[["send","write"],["email"]],Email,"Sends an email through Gmail",[])
-    CMD("translate",[["translate"],["from"],["to"]],Translate,"Translate some words from one language to another",[cmdType(False,True),cmdType(False,False),cmdType(False,False)])
-    CMD("weather",[["weather"]],Weather,"I'll tell you waht the weather is like today and suggest what to wear",[])
-    CMD("power",[["shutdown","logout","restart"],["computer"]],Power,"Allows you to restart/shutdown/logout simply by asking",[cmdType(False,False)])
-    CMD("hue setup",[["set"],["up"],["hue","lights"]],SetupHue,"Allows you to use your Philips Hue lights with me",[])
-    CMD("hue turn on off",[["turn"],["light"],["on","off"]],HueOnOff,"Turn a Philips Hue light on or off",[cmdType(False,True),cmdType(False,False)])
-    CMD("rename hue light",[["rename"],["hue","light"]],RenameHueLight,"Rename a light to something that better suits it. This name is used to say what light should be turned on/off etc.",[])
-    CMD("hue light brightness",[["turn"],["light"],["to"]],HuePercent,"Set the brightness of a given light as a given percent",[cmdType(False,True),cmdType(True,False)])
-    CMD("flip coin",[["flip"],["coin"]],FlipCoin,"I'll flip a coin for you incase you want to settle an argument",[])
-    CMD("roll dice",[["roll"],["die","dice"]],RollDice,"I can roll a die if you don't have one",[])
-    CMD("restart",[["restart","assistant"]],Restart,"Restart me",[])
-
-    #40 commands
+    CMD("***","no reply",0,[],NoReply,"This just tells you that I didn't quite understand what you wanted me to do.",[])
+    CMD("***","help",0,["help"],Help,"Provides help.",[])
+    CMD("basic","repeat",0,[["repeat"]],Repeat,"Repeats the last command.",[])
+    CMD("basic","hello",0,[["hello","hi","hey"]],Hello,"Simply say hello.",[])
+    CMD("basic","goodbye",0,[["goodbye","bye"]],Goodbye,"Simply say goodbye to close me.",[])
+    CMD("personalisation","change my name",1,[["change"],["your"],["name","username"]],ChangeName,"Change my name to something that feels more personal.",[])
+    CMD("personalisation","change your name",1,[["change"],["my"],["name","username"]],ChangeUsername,"Change your username to something that feels more personal.",[])
+    CMD("personalisation","change voice",1,[["change"],["voice"]],ChangeVoice,"Change my voice to one of several option that are demoed to you beforehand.",[])
+    CMD("control","open app",1,[["open"]],OpenApp,"Open an app by telling me its name. If I don't already know where that app is I'll ask you for its directory so I can create a shortcut.",[cmdType(False,True)],{"open": cmdWord(True,False)})
+    CMD("control","change app",1,[["change","add"],["app"]],ChangeApp,"If you made a mistake when giving me an app's directory or want to add an new app's directory.",[])
+    CMD("internet","google search",1,[["search", "google"]],Search,"Search google using the 'search' or 'google' keyword and I will provide you with the top search result.",[cmdType()],{"search":cmdWord(True),"google":cmdWord(True)})
+    CMD("basic","joke",0,[["joke"]],Joke,"I'll tell you a joke.",[])
+    CMD("basic","time",0,[["time"]],GetTime,"I'll tell you the time.",[])
+    CMD("basic","date",0,[["date","day","today"]],GetDate,"I'll tell you the date.",[])
+    CMD("numbers","random number",1,[["number"],["and","to"]],RandomNumber,"I'll give you a random number between a and b which could be set out similar to the following: give me a random number between a and b.",[cmdType(True,False),cmdType(True,False)],{"number":cmdWord(True),"to":cmdWord(True,True),"and":cmdWord(True,True)})
+    CMD("numbers","simple math",1,[["add","plus","subtract","minus","times","power","^","multiplied","divided","/","over","+","-"]],BasicMath,"I can do division, multiplication, subtraction and addition of two numbers but remember to use the keywords 'result' or 'total.'",[cmdType(True,False),cmdType(True,False),cmdType(False,False)],{"/":cmdWord(True,True,True),"result":cmdWord(True),"total":cmdWord(True),"add":cmdWord(True,True,True),"plus":cmdWord(True,True,True),"subtract":cmdWord(True,True,True),"minus":cmdWord(True,True,True),"times":cmdWord(True,True,True),"power":cmdWord(True,True,True),"^":cmdWord(True,True,True),"multiplied":cmdWord(True,True,True),"divided":cmdWord(True,True,True),"over":cmdWord(True,True,True),"+":cmdWord(True,True,True),"-":cmdWord(True,True,True)},True)
+    CMD("numbers","start timer",1,[["start","begin"],["timer"]],StartTimer,"I'll start a timer.",[])
+    CMD("numbers","stop timer",1,[["stop","end","finish"],["timer"]],StopTimer,"I'll stop a timer and tell you how long it lasted.",[])
+    CMD("numbers","events",1,[["when"],["is"]],WhenEvent,"I can tell you when special events like halloween are.")
+    CMD("personalisation","add calendar",1,[["add"],["calendar"]],AddCalendar,"Set events on certain dates to remind you to do tasks and stay organised.",[])
+    CMD("personalisation","check calendar",1,[["check","show"],["calendar"]],CheckCalendar,"Check tasks you have to do today on your calendar to remind you to do tasks and stay organised.",[])
+    CMD("***","???",69,[["mr"],["marsh"],["is"],["love"]],Marsh,"???",[])
+    CMD("control","mute",0,[["mute"]],Mute,"Mute my voice but text will still appear on screen.",[])
+    CMD("control","unmute",0,[["unmute"]],Unmute,"Unmute my voice when you want.",[])
+    CMD("shopping","add shopping list",1,[["add"],["to"],["shopping"],["list"]],AddShoppingList,"Add something to your shopping list.",[cmdType(False,True)],{"add":cmdWord(True,True),"to":cmdWord(False,True)})
+    CMD("shopping","remove shopping list",1,[["remove"],["to","from"],["shopping"],["list"]],RemoveShoppingList,"Remove an item from your shopping list.",[cmdType(False,False),cmdType(False,True)],{"remove":cmdWord(True),"to":cmdWord(False,True),"from":cmdWord(False,True)})
+    CMD("shopping","clear shopping list",1,[["clear"],["shopping"],["list"]],ClearShoppingList,"Removes all items from shopping your list.",[])
+    CMD("shopping","go shopping",1,[["go"],["shopping"]],GoShopping,"Searches each item on your shopping list on amazon.",[])
+    CMD("shopping","email shopping list",1,[["email","send","give","get","print"],["shopping"],["list"]],PrintShoppingList,"Emails your shopping list to the email that you provided me with.",[])
+    CMD("internet","email",0,[["send","write"],["email"]],Email,"Sends an email through Gmail.",[])
+    CMD("internet","translate",1,[["translate"],["from"],["to"]],Translate,"Translate some words from one language to another",[cmdType(False,True),cmdType(False,False),cmdType(False,False)],{"translate":cmdWord(True),"from":cmdWord(True,True),"to":cmdWord(True,True)})
+    CMD("basic","weather",0,[["weather"]],Weather,"I'll tell you waht the weather is like today and suggest what to wear.",[])
+    CMD("control","power",0,[["shutdown","logout","restart"],["computer"]],Power,"Allows you to restart/shutdown/logout simply by asking.",[cmdType(False,False)],{"shutdown":cmdWord(False,False,True),"logout":cmdWord(False,False,True),"restart":cmdWord(False,False,True)})
+    CMD("lighting","hue setup",0,[["set"],["up"],["hue","lights","light"]],SetupHue,"Allows you to use your Philips Hue lights with me.",[])
+    CMD("lighting","hue turn on off",1,[["turn"],["on","off"]],HueOnOff,"Turn a Philips Hue light on or off.",[cmdType(False,True),cmdType(False,False)],{"turn":cmdWord(True),"on":cmdWord(False,True,True),"off":cmdWord(False,False,True)})
+    CMD("lighting","rename hue light",1,[["rename"],["hue","light","lights"]],RenameHueLight,"Rename a light to something that better suits it. This name is used to say what light should be turned on/off etc.",[])
+    CMD("lighting","hue light brightness",1,[["turn"],["to"]],HuePercent,"Set the brightness of a given light as a given percent.",[cmdType(False,True),cmdType(True,False)],{"turn":cmdWord(True),"to":cmdWord(True,True),"up":cmdWord(False,True),"down":cmdWord(False,True)})
+    CMD("basic","flip coin",0,[["flip"],["coin"]],FlipCoin,"I'll flip a coin for you incase you want to settle an argument.",[])
+    CMD("basic","roll dice",0,[["roll"],["die","dice"]],RollDice,"I can roll a die if you don't have one.",[])
+    CMD("control","restart",0,[["restart","assistant"]],Restart,"Restart me.",[])
+    CMD("basic","how are you",0,[["how"],["are"],["you"]],Feeling,"Ask me how I feel and I'll ask you back.",[])
+    CMD("control","set volume",1,[["volume"]],CMDSetVolume,"Set a volume for apps on your computer to a certain percentage.",[cmdType(True,False)],{"volume":cmdWord(True)})
+    CMD("control","volume up down",1,[["volume"],["up","down"]],VolumeUpDown,"Turn volume up or down by 10%",[cmdType(False,False)],{"up":cmdWord(False,False,True),"down":cmdWord(False,False,True)})
+    CMD("internet","define",1,[["define"]],Dictionary,"I'll define a word with the help of dictionary.com",[cmdType(False,False)],{"define":cmdWord(True)})
+        
+    #42 commands
 
     CheckOpenApps()
     lastCheck = time.time()
@@ -1169,7 +1237,7 @@ try:
         username = SpeechInput("What's your name?")
         Say("Hello, "+username+"! That's a nice name. my name is "+ name+ " but you can change it if you want.")
         pickle.dump(username, open("Username.dat","wb"))
-        Say("I recommend you start off in help to see what you can do")
+        Say("I recommend you start off in help to see what you can do.")
         Help("")
 
     appCheckFrequency = 3 * 60
@@ -1190,11 +1258,12 @@ try:
                     lastCMD = UserCMD
         if windowClosed:
             exit()
-                        
+                            
 except BaseException as e:
-    Say("An error occured")
+    print(e)
+    Say("An error occured.")
     app.dots.configure(text = "ERROR: "+str(e))
-    Say("Automatically restarting in 5 seconds")
+    Say("Automatically restarting in 5 seconds.")
     time.sleep(5)
     Restart("")
 
